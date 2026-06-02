@@ -31,7 +31,19 @@ function generateRoomCode() {
     // Genera un código corto de 5 caracteres (ej: 4F2G9)
     return Math.random().toString(36).substring(2, 7).toUpperCase();
 }
-const peer = new Peer(generateRoomCode());
+
+// Configuración con servidores STUN públicos de Google para atravesar NAT/Firewalls
+const peerConfig = {
+    config: {
+        'iceServers': [
+            { 'urls': 'stun:stun.l.google.com:19302' },
+            { 'urls': 'stun:stun1.l.google.com:19302' },
+            { 'urls': 'stun:stun2.l.google.com:19302' }
+        ]
+    }
+};
+
+const peer = new Peer(generateRoomCode(), peerConfig);
 let conn;
 let isHost = false;
 const myIdDisplay = document.getElementById('my-id');
@@ -40,6 +52,15 @@ const statusDisplay = document.getElementById('status');
 peer.on('open', (id) => {
     myIdDisplay.innerText = id;
     statusDisplay.innerText = "📡 Esperando a un compañero...";
+});
+
+peer.on('error', (err) => {
+    console.error('Error en PeerJS:', err.type);
+    statusDisplay.innerText = "❌ Error: " + err.type;
+    if (err.type === 'id-taken') {
+        statusDisplay.innerText = "⚠️ ID ocupado, reintentando...";
+        setTimeout(() => location.reload(), 2000);
+    }
 });
 
 window.copyId = () => {
@@ -59,9 +80,15 @@ peer.on('connection', (c) => {
 
 // El Cliente inicia la conexión
 window.connectToPeer = () => {
-    const peerId = document.getElementById('peer-id').value;
+    const peerId = document.getElementById('peer-id').value.trim().toUpperCase();
+    if (!peerId) {
+        statusDisplay.innerText = "⚠️ Ingresa un código válido";
+        return;
+    }
+    statusDisplay.innerText = "🔗 Conectando a " + peerId + "...";
     isHost = false;
-    setupConnection(peer.connect(peerId));
+    const connection = peer.connect(peerId, { reliable: true });
+    setupConnection(connection);
 };
 
 function setupConnection(connection) {
@@ -78,6 +105,11 @@ function setupConnection(connection) {
             Matter.Body.setStatic(player2, true);
         }
     };
+
+    connection.on('error', (err) => {
+        console.error('Error de conexión:', err);
+        statusDisplay.innerText = "❌ Fallo al conectar";
+    });
 
     // Si la conexión ya está abierta, ejecutamos la lógica inmediatamente
     if (conn.open) onOpen();
