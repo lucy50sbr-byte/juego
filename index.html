@@ -6,7 +6,7 @@
     <title>Yarny Clone - Proyecto Juego</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a1a1a; }
-        canvas { display: block; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        canvas { display: block; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.5); max-width: 100%; height: auto !important; }
         .ui-overlay { 
             position: fixed; top: 20px; left: 20px; 
             color: white; font-family: 'Segoe UI', system-ui, sans-serif; 
@@ -34,6 +34,27 @@
             border: none; color: white; border-radius: 8px; font-weight: 900; 
             width: 100%; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);
         }
+
+        /* Controles Mobile */
+        #mobile-controls {
+            position: fixed; bottom: 30px; left: 0; right: 0;
+            display: none; justify-content: space-between; align-items: flex-end;
+            padding: 0 40px; pointer-events: none; user-select: none; z-index: 10;
+        }
+        #joystick-base {
+            width: 120px; height: 120px; background: rgba(255,255,255,0.1); 
+            border-radius: 50%; position: relative; pointer-events: auto; touch-action: none;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        #joystick-knob {
+            width: 50px; height: 50px; background: white; border-radius: 50%; 
+            position: absolute; top: 35px; left: 35px; opacity: 0.5;
+        }
+        #jump-btn {
+            width: 80px; height: 80px; background: rgba(255,255,255,0.1); 
+            border: 2px solid white; color: white; border-radius: 50%; 
+            font-weight: 900; pointer-events: auto; touch-action: none; outline: none;
+        }
     </style>
 </head>
 <body>
@@ -50,6 +71,14 @@
             <button class="btn-connect" onclick="connectToPeer()">Conectar y Jugar</button>
         </div>
     </div>
+
+    <div id="mobile-controls">
+        <div id="joystick-base">
+            <div id="joystick-knob"></div>
+        </div>
+        <button id="jump-btn">SALTAR</button>
+    </div>
+
     <!-- Motor de física Matter.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
