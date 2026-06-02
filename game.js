@@ -33,14 +33,20 @@ function generateRoomCode() {
 }
 
 // Configuración con servidores STUN públicos de Google para atravesar NAT/Firewalls
+// Configuración robusta de servidores ICE para atravesar NAT y Firewalls móviles
 const peerConfig = {
+    debug: 2, // Ayuda a ver errores en la consola del navegador
     config: {
         'iceServers': [
             { 'urls': 'stun:stun.l.google.com:19302' },
             { 'urls': 'stun:stun1.l.google.com:19302' },
-            { 'urls': 'stun:stun2.l.google.com:19302' }
+            { 'urls': 'stun:stun2.l.google.com:19302' },
+            { 'urls': 'stun:stun3.l.google.com:19302' },
+            { 'urls': 'stun:stun4.l.google.com:19302' },
+            { 'urls': 'stun:stun.services.mozilla.com' }
         ]
-    }
+    },
+    secure: true // Obligatorio para GitHub Pages (HTTPS)
 };
 
 const peer = new Peer(generateRoomCode(), peerConfig);
@@ -52,6 +58,12 @@ const statusDisplay = document.getElementById('status');
 peer.on('open', (id) => {
     myIdDisplay.innerText = id;
     statusDisplay.innerText = "📡 Esperando a un compañero...";
+});
+
+// Manejar desconexión del servidor de señalización
+peer.on('disconnected', () => {
+    statusDisplay.innerText = "🔌 Desconectado del servidor. Reconectando...";
+    peer.reconnect();
 });
 
 peer.on('error', (err) => {
@@ -87,7 +99,10 @@ window.connectToPeer = () => {
     }
     statusDisplay.innerText = "🔗 Conectando a " + peerId + "...";
     isHost = false;
-    const connection = peer.connect(peerId, { reliable: true });
+    const connection = peer.connect(peerId, { 
+        reliable: true,
+        serialization: 'json' // Garantiza compatibilidad entre dispositivos
+    });
     setupConnection(connection);
 };
 
