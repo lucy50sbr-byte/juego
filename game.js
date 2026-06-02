@@ -1,288 +1,186 @@
 const { Engine, Render, Runner, Bodies, Composite, Constraint, MouseConstraint, Mouse } = Matter;
 
-// 1. Configuración del Motor y mundo
-const engine = Engine.create({ enableSleeping: false });
+const SUPABASE_URL = "https://xhtiquhbfvzvnntfptrh.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_s3fntuQStrIFj_fZrp6DNQ_Uu94hsYV"; // Debe empezar con eyJhbGci...
+//const SUPABASE_ANON_KEY = "PEGÁ_AQUÍ_TU_LLAVE_ANON_REAL_DE_SUPABASE"; // Debe empezar con eyJhbGci...
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Creamos un canal para la comunicación en tiempo real (Broadcast)
+const channel = supabaseClient.channel('game-room', {
+    config: {
+        broadcast: { self: false },
+    },
+});
+
+channel.subscribe();
+
+// Identificar quién es este jugador
+const isPlayerA = confirm("¿Eres el Jugador Rojo (A)? (Cancelar para Azul/B)");
+const role = isPlayerA ? 'playerA' : 'playerB';
+console.log(`Jugando como: ${role}`);
+
+// 1. Configuración del motor
+const engine = Engine.create();
 const world = engine.world;
 
-// Dimensiones fijas para que ambos mundos sean idénticos
-const GAME_WIDTH = 800;
-const GAME_HEIGHT = 600;
-
-// 2. Creación de los personajes (Yarnys) - Movido arriba para evitar errores de referencia
-const player1 = Bodies.circle(300, 400, 20, { 
-    friction: 0.1, 
-    frictionAir: 0.02,
-    render: { fillStyle: '#ff4d4d' } 
-});
-const player2 = Bodies.circle(500, 400, 20, { 
-    friction: 0.1, 
-    frictionAir: 0.02,
-    render: { fillStyle: '#4d79ff' } 
-});
-
-// 3. Suelo y Obstáculos
-const ground = Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 30, GAME_WIDTH, 60, { isStatic: true });
-const platform = Bodies.rectangle(GAME_WIDTH / 2, 450, 200, 40, { isStatic: true });
-
-Composite.add(world, [player1, player2, ground, platform]);
-
-// --- CONFIGURACIÓN DE RED (PeerJS) ---
-function generateRoomCode() {
-    // Genera un código corto de 5 caracteres (ej: 4F2G9)
-    return Math.random().toString(36).substring(2, 7).toUpperCase();
-}
-
-// Configuración con servidores STUN públicos de Google para atravesar NAT/Firewalls
-// Configuración robusta de servidores ICE para atravesar NAT y Firewalls móviles
-const peerConfig = {
-    debug: 2, // Ayuda a ver errores en la consola del navegador
-    config: {
-        'iceServers': [
-            { 'urls': 'stun:stun.l.google.com:19302' },
-            { 'urls': 'stun:stun1.l.google.com:19302' },
-            { 'urls': 'stun:stun2.l.google.com:19302' },
-            { 'urls': 'stun:stun3.l.google.com:19302' },
-            { 'urls': 'stun:stun4.l.google.com:19302' },
-            { 'urls': 'stun:stun.services.mozilla.com' }
-        ]
-    },
-    secure: true // Obligatorio para GitHub Pages (HTTPS)
-};
-
-const peer = new Peer(generateRoomCode(), peerConfig);
-let conn;
-let isHost = false;
-const myIdDisplay = document.getElementById('my-id');
-const statusDisplay = document.getElementById('status');
-
-peer.on('open', (id) => {
-    myIdDisplay.innerText = id;
-    statusDisplay.innerText = "📡 Esperando a un compañero...";
-});
-
-// Manejar desconexión del servidor de señalización
-peer.on('disconnected', () => {
-    statusDisplay.innerText = "🔌 Desconectado del servidor. Reconectando...";
-    peer.reconnect();
-});
-
-peer.on('error', (err) => {
-    console.error('Error en PeerJS:', err.type);
-    statusDisplay.innerText = "❌ Error: " + err.type;
-    if (err.type === 'id-taken') {
-        statusDisplay.innerText = "⚠️ ID ocupado, reintentando...";
-        setTimeout(() => location.reload(), 2000);
-    }
-});
-
-window.copyId = () => {
-    const id = myIdDisplay.innerText;
-    navigator.clipboard.writeText(id).then(() => {
-        const originalText = statusDisplay.innerText;
-        statusDisplay.innerText = "✅ ¡CÓDIGO COPIADO!";
-        setTimeout(() => statusDisplay.innerText = originalText, 2000);
-    });
-};
-
-// El Host recibe la conexión
-peer.on('connection', (c) => {
-    isHost = true;
-    setupConnection(c);
-});
-
-// El Cliente inicia la conexión
-window.connectToPeer = () => {
-    const peerId = document.getElementById('peer-id').value.trim().toUpperCase();
-    if (!peerId) {
-        statusDisplay.innerText = "⚠️ Ingresa un código válido";
-        return;
-    }
-    statusDisplay.innerText = "🔗 Conectando a " + peerId + "...";
-    isHost = false;
-    const connection = peer.connect(peerId, { 
-        reliable: true,
-        serialization: 'json' // Garantiza compatibilidad entre dispositivos
-    });
-    setupConnection(connection);
-};
-
-function setupConnection(connection) {
-    // Cerrar conexión previa si existe
-    if (conn) conn.close();
-    conn = connection;
-    
-    const onOpen = () => {
-        statusDisplay.innerText = isHost ? "Eres el HOST (Rojo)" : "Conectado como CLIENTE (Azul)";
-        if (!isHost) {
-            console.log("Conectado como cliente. Desactivando física local.");
-            engine.gravity.y = 0;
-            Matter.Body.setStatic(player1, true);
-            Matter.Body.setStatic(player2, true);
-        }
-    };
-
-    connection.on('error', (err) => {
-        console.error('Error de conexión:', err);
-        statusDisplay.innerText = "❌ Fallo al conectar";
-    });
-
-    // Si la conexión ya está abierta, ejecutamos la lógica inmediatamente
-    if (conn.open) onOpen();
-    else conn.on('open', onOpen);
-
-    conn.on('data', (data) => {
-        if (isHost) {
-            // Almacenar teclas remotas recibidas del cliente
-            remoteKeys.left = !!data.l;
-            remoteKeys.right = !!data.r;
-            remoteKeys.jump = !!data.j;
-        }
-        else {
-            updateClientWorld(data);
-        }
-    });
-}
-
-let remoteKeys = { left: false, right: false, jump: false };
-// 2. Configuración del Renderizado
+// 2. Configuración del renderizado
 const render = Render.create({
     element: document.body,
     engine: engine,
     options: {
-        width: GAME_WIDTH,
-        height: GAME_HEIGHT,
+        width: window.innerWidth,
+        height: window.innerHeight,
         wireframes: false,
-        background: '#222'
+        background: '#1a1a1a'
     }
 });
 
 Render.run(render);
-const runner = Runner.create();
-Runner.run(runner, engine);
+Runner.run(Runner.create(), engine);
 
-// 6. Control de teclado
+// 3. Crear Personajes (Yarnys)
+const playerA = Bodies.circle(300, 400, 20, { 
+    friction: 0.5, 
+    render: { fillStyle: '#ff4d4d' } 
+});
+const playerB = Bodies.circle(500, 400, 20, { 
+    friction: 0.5, 
+    render: { fillStyle: '#4d79ff' } 
+});
+
+// Variable para la cuerda
+let rope = null;
+
+function toggleRope(active, emit = true) {
+    console.log(`Cuerda solicitada: ${active}. Estado actual: ${!!rope}`);
+    
+    // Primero eliminamos cualquier cuerda existente para evitar duplicados
+    if (rope) {
+        Composite.remove(world, rope);
+        rope = null;
+    }
+
+    if (active) {
+        rope = Constraint.create({
+            bodyA: playerA,
+            bodyB: playerB,
+            length: 250,
+            stiffness: 0.01,
+            damping: 0.1,
+            render: { strokeStyle: '#ffffff', lineWidth: 3, visible: true }
+        });
+        Composite.add(world, rope);
+    }
+    
+    if (emit) {
+        channel.send({
+            type: 'broadcast',
+            event: 'toggleRope',
+            payload: { active }
+        });
+    }
+}
+
+// 5. Escenario (Suelo y plataformas)
+const floor = Bodies.rectangle(window.innerWidth / 2, window.innerHeight - 20, window.innerWidth, 40, { isStatic: true });
+const leftWall = Bodies.rectangle(10, window.innerHeight / 2, 20, window.innerHeight, { isStatic: true });
+const rightWall = Bodies.rectangle(window.innerWidth - 10, window.innerHeight / 2, 20, window.innerHeight, { isStatic: true });
+const platform = Bodies.rectangle(400, 450, 250, 20, { isStatic: true });
+
+// 6. Objeto Cooperativo (Caja pesada)
+const box = Bodies.rectangle(600, 500, 80, 80, { 
+    mass: 5, 
+    friction: 0.1,
+    render: { fillStyle: '#f39c12' } // Color naranja para que coincida con tu descripción
+});
+
+Composite.add(world, [playerA, playerB, floor, leftWall, rightWall, platform, box]);
+
+// 6. Controles básicos
 const keys = {};
-document.addEventListener('keydown', e => keys[e.code] = true);
-document.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+    // Activar/Desactivar cuerda con Espacio
+    if (e.code === 'Space') {
+        toggleRope(!rope);
+    }
+});
+window.addEventListener('keyup', (e) => keys[e.code] = false);
 
-let syncTick = 0; // Para optimizar el envío de datos
-let lastSentKeys = ""; // Para evitar enviar datos duplicados por la red
+// Recibir actualizaciones del otro jugador
+channel.on('broadcast', { event: 'toggleRope' }, ({ payload }) => {
+    toggleRope(payload.active, false);
+});
 
-// --- LÓGICA DE JOYSTICK PARA CELULAR ---
-let touchInputs = { left: false, right: false, jump: false };
-const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+channel.on('broadcast', { event: 'playerMove' }, ({ payload: data }) => {
+    const target = (data.role === 'playerA') ? playerA : playerB;
+    if (!target) return;
 
-if (isMobile) {
-    document.getElementById('mobile-controls').style.display = 'flex';
-    const base = document.getElementById('joystick-base');
-    const knob = document.getElementById('joystick-knob');
-    const jumpBtn = document.getElementById('jump-btn');
+    Matter.Body.setPosition(target, data.position);
+    Matter.Body.setVelocity(target, data.velocity);
 
-    const handleJoystick = (e) => {
-        e.preventDefault();
-        const touch = e.touches[0];
-        const rect = base.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        
-        let dx = touch.clientX - centerX;
-        let dy = touch.clientY - centerY;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const maxDist = 40;
+    // Sincronización constante del estado de la cuerda
+    // Si el otro jugador tiene la cuerda y yo no, la pongo. Si él no la tiene y yo sí, la quito.
+    if (data.ropeActive === true && !rope) {
+        toggleRope(true, false);
+    } else if (data.ropeActive === false && rope) {
+        toggleRope(false, false);
+    }
 
-        if (dist > maxDist) {
-            dx *= maxDist / dist;
-            dy *= maxDist / dist;
-        }
-
-        knob.style.transform = `translate(${dx}px, ${dy}px)`;
-        touchInputs.left = dx < -15;
-        touchInputs.right = dx > 15;
-    };
-
-    base.addEventListener('touchstart', handleJoystick);
-    base.addEventListener('touchmove', handleJoystick);
-    base.addEventListener('touchend', () => { knob.style.transform = 'translate(0,0)'; touchInputs.left = false; touchInputs.right = false; });
-    jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); touchInputs.jump = true; });
-    jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); touchInputs.jump = false; });
-}
-
-function updateClientWorld(data) {
-    // El cliente mueve sus círculos según lo que dice el host
-    Matter.Body.setPosition(player1, { x: data.p1.x, y: data.p1.y });
-    Matter.Body.setAngle(player1, data.r1);
-    Matter.Body.setPosition(player2, { x: data.p2.x, y: data.p2.y });
-    Matter.Body.setAngle(player2, data.r2);
-}
-
-Matter.Events.on(engine, 'beforeUpdate', () => {
-    const walkSpeed = 5.5; 
-    const jumpPower = -13;
-
-    if (isHost) {
-        // --- CONTROL JUGADOR 1 (ROJO) ---
-        // En el Host, Rojo se mueve con WASD
-        let p1vx = 0;
-        if (keys['KeyA']) p1vx = -walkSpeed;
-        if (keys['KeyD']) p1vx = walkSpeed;
-        Matter.Body.setVelocity(player1, { x: p1vx, y: player1.velocity.y });
-        
-        if (keys['KeyW'] && Math.abs(player1.velocity.y) < 0.1) {
-            Matter.Body.setVelocity(player1, { x: player1.velocity.x, y: jumpPower });
-        }
-
-        // --- CONTROL JUGADOR 2 (AZUL) ---
-        // El Host lo mueve con sus Flechas O con lo que mande el Cliente
-        let p2vx = 0;
-        // Combinamos entrada remota y local (flechas) para el azul
-        const left = (remoteKeys.left === true) || (keys['ArrowLeft'] === true);
-        const right = (remoteKeys.right === true) || (keys['ArrowRight'] === true);
-        const jump = (remoteKeys.jump === true) || (keys['ArrowUp'] === true);
-
-        if (left) p2vx = -walkSpeed;
-        if (right) p2vx = walkSpeed;
-        Matter.Body.setVelocity(player2, { x: p2vx, y: player2.velocity.y });
-        
-        if (jump && Math.abs(player2.velocity.y) < 0.1) {
-            Matter.Body.setVelocity(player2, { x: player2.velocity.x, y: jumpPower });
-        }
-
-        // Enviamos posiciones al cliente cada 2 frames (30fps) para no saturar la red
-        syncTick++;
-        if (conn && conn.open && syncTick % 2 === 0) {
-            conn.send({
-                p1: { x: player1.position.x, y: player1.position.y },
-                r1: player1.angle,
-                p2: { x: player2.position.x, y: player2.position.y },
-                r2: player2.angle
-            });
-        }
-    } else if (conn && conn.open) {
-        // El Cliente envía el estado de sus teclas al Host
-        // Usamos nombres cortos (l, r, j) para que el paquete sea lo más pequeño posible
-        const currentKeys = {
-            l: !!(keys['ArrowLeft'] || keys['KeyA'] || touchInputs.left),
-            r: !!(keys['ArrowRight'] || keys['KeyD'] || touchInputs.right),
-            j: !!(keys['ArrowUp'] || keys['KeyW'] || keys['Space'] || touchInputs.jump)
-        };
-        
-        const keysStr = JSON.stringify(currentKeys);
-        if (keysStr !== lastSentKeys) {
-            conn.send(currentKeys);
-            lastSentKeys = keysStr;
-        }
+    // Si recibimos datos de la caja (enviados por el Jugador A)
+    if (data.box) {
+        Matter.Body.setPosition(box, data.box.position);
+        Matter.Body.setVelocity(box, data.box.velocity);
+        Matter.Body.setAngle(box, data.box.angle);
+        Matter.Body.setAngularVelocity(box, data.box.angularVelocity);
     }
 });
 
-// Mouse para interactuar con el mundo
-const mouse = Mouse.create(render.canvas);
-const mouseConstraint = MouseConstraint.create(engine, {
-    mouse: mouse,
-    constraint: { stiffness: 0.2, render: { visible: false } }
+Matter.Events.on(engine, 'beforeUpdate', () => {
+    const speed = 0.005;
+    let localPlayer = isPlayerA ? playerA : playerB;
+    let moved = false;
+
+    // Solo controlar el personaje asignado
+    if (keys['ArrowLeft'] || keys['KeyA']) { Matter.Body.applyForce(localPlayer, localPlayer.position, { x: -speed, y: 0 }); moved = true; }
+    if (keys['ArrowRight'] || keys['KeyD']) { Matter.Body.applyForce(localPlayer, localPlayer.position, { x: speed, y: 0 }); moved = true; }
+    if (keys['ArrowUp'] || keys['KeyW']) { Matter.Body.applyForce(localPlayer, localPlayer.position, { x: 0, y: -speed * 2 }); moved = true; }
+
+    // Detectar si el jugador local está tocando la caja
+    const isTouchingBox = Matter.Collision.collides(localPlayer, box) !== null;
+
+    // Enviar posición al servidor si nos movemos o periódicamente
+    // Ahora AMBOS jugadores envían latidos constantes para que la soga no se desincronice
+    if (moved || isTouchingBox || (engine.timing.timestamp % 100 < 20)) {
+        const payload = {
+            role: role,
+            position: localPlayer.position,
+            velocity: localPlayer.velocity,
+            ropeActive: !!rope // Enviamos el estado actual para que el otro lo sepa siempre
+        };
+
+        // MEJORA DE AUTORIDAD:
+        // 1. Si yo toco la caja, yo mando su posición (sea A o B).
+        // 2. Si nadie la toca, el Jugador A (Master) solo manda la posición si la caja está quieta.
+        const boxIsMoving = box.speed > 0.1;
+        if (isTouchingBox || (isPlayerA && !boxIsMoving)) {
+            payload.box = {
+                position: box.position,
+                velocity: box.velocity,
+                angle: box.angle,
+                angularVelocity: box.angularVelocity
+            };
+        }
+        channel.send({
+            type: 'broadcast',
+            event: 'playerMove',
+            payload: payload
+        });
+    }
 });
-Composite.add(world, mouseConstraint);
 
 // Ajustar al redimensionar ventana
 window.addEventListener('resize', () => {
-    // Mantenemos el tamaño fijo para garantizar sincronización visual perfecta
+    render.canvas.width = window.innerWidth;
+    render.canvas.height = window.innerHeight;
 });
