@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#10151d">
+    <meta name="description" content="Laminador inicial de archivos STL que funciona en tu dispositivo.">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="logo-compilar-stl.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+    <title>Compilar STL</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Compilar STL, inicio">
+        <img class="brand-logo" src="logo-compilar-stl.png" alt="" aria-hidden="true">
+      </a>
+      <nav class="app-nav" aria-label="Secciones de la aplicación">
+        <button id="laminatorTab" class="active" type="button" aria-pressed="true">LAMINADOR 3D</button>
+        <button id="printerTab" type="button" aria-pressed="false">MI IMPRESORA</button>
+      </nav>
+      <span class="offline-badge"><i></i> Procesamiento local</span>
+    </header>
+
+    <main>
+      <div id="laminatorView">
+        <section class="intro">
+          <p class="eyebrow">PREPARACIÓN DE MODELOS · BETA</p>
+          <h1>Del modelo a la <span>impresión.</span></h1>
+          <p class="intro-copy">Prepara tu archivo STL y genera G-code directamente en este dispositivo.</p>
+        </section>
+
+        <div class="workspace">
+        <section class="model-panel panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">01 — MODELO</p>
+              <h2>Tu pieza</h2>
+            </div>
+            <button id="removeModel" class="icon-button hidden" type="button" aria-label="Quitar modelo">×</button>
+          </div>
+
+          <label id="dropZone" class="drop-zone" for="stlFile">
+            <input id="stlFile" type="file" accept=".stl,model/stl">
+            <span class="upload-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v4A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <strong id="uploadTitle">Suelta aquí tu archivo STL</strong>
+            <span id="uploadHint">o toca para buscar · STL binario o ASCII</span>
+            <span class="browse-button">Seleccionar archivo</span>
+          </label>
+
+          <div id="modelInfo" class="model-info hidden">
+            <div class="model-name-row">
+              <span class="file-icon" aria-hidden="true">STL</span>
+              <div class="model-name-wrap">
+                <strong id="modelName"></strong>
+                <span id="modelSize"></span>
+              </div>
+            </div>
+            <div class="dimensions">
+              <div><span>X</span><strong id="dimX">—</strong><small>mm</small></div>
+              <div><span>Y</span><strong id="dimY">—</strong><small>mm</small></div>
+              <div><span>Z</span><strong id="dimZ">—</strong><small>mm</small></div>
+            </div>
+            <div class="object-tools">
+              <div class="field">
+                <label for="objectSelect">Objeto seleccionado</label>
+                <select id="objectSelect"></select>
+              </div>
+              <div class="field object-color-field">
+                <label for="objectColor">Color en vista 3D</label>
+                <input id="objectColor" type="color" value="#08d8f5">
+              </div>
+              <div class="model-actions">
+                <button id="duplicateObject" type="button">Duplicar objeto</button>
+                <button id="deleteObject" type="button">Eliminar copia</button>
+              </div>
+              <p class="object-color-note">El color solo cambia la vista; no genera impresión multicolor.</p>
+            </div>
+            <div class="model-scale field">
+              <label for="modelScale">Unidades del STL</label>
+              <select id="modelScale">
+                <option value="1">Milímetros (×1)</option>
+                <option value="10">Centímetros (×10)</option>
+                <option value="25.4">Pulgadas (×25,4)</option>
+                <option value="1000">Metros (×1000)</option>
+              </select>
+            </div>
+            <div class="transform-fields">
+              <div class="field">
+                <label for="scalePercent">Escala del objeto</label>
+                <div class="input-suffix"><input id="scalePercent" type="number" min="0.1" max="1000" step="0.1" value="100" required><span>%</span></div>
+              </div>
+            </div>
+            <p class="transform-label">Posición relativa al centro de cama (mm)</p>
+            <div class="transform-fields movement-fields">
+              <div class="field">
+                <label for="positionX">Posición X</label>
+                <input id="positionX" type="number" min="-1000" max="1000" step="0.1" value="0" required>
+              </div>
+              <div class="field">
+                <label for="positionY">Posición Y</label>
+                <input id="positionY" type="number" min="-1000" max="1000" step="0.1" value="0" required>
+              </div>
+              <div class="field">
+                <label for="positionZ">Altura Z</label>
+                <input id="positionZ" type="number" min="0" max="1000" step="0.1" value="0" required>
+              </div>
+            </div>
+            <p class="transform-label">Giro por eje (grados)</p>
+            <div class="transform-fields rotation-fields">
+              <div class="field"><label for="rotationX">Giro X</label><input id="rotationX" type="number" min="-360" max="360" step="0.5" value="0" required></div>
+              <div class="field"><label for="rotationY">Giro Y</label><input id="rotationY" type="number" min="-360" max="360" step="0.5" value="0" required></div>
+              <div class="field"><label for="rotationZ">Giro Z</label><input id="rotationZ" type="number" min="-360" max="360" step="0.5" value="0" required></div>
+            </div>
+            <div class="model-actions">
+              <button id="centerModel" type="button">Centrar en cama</button>
+              <button id="fitModel" type="button">Ajustar a cama</button>
+            </div>
+            <div class="model-actions orientation-actions">
+              <button type="button" data-lay-axis="rotationX">Acostar sobre X</button>
+              <button type="button" data-lay-axis="rotationY">Acostar sobre Y</button>
+              <button type="button" id="resetRotation">Restablecer giro</button>
+            </div>
+            <div id="modelNotice" class="notice hidden" role="status"></div>
+          </div>
+
+          <section class="model-viewer" aria-label="Vista tridimensional del modelo">
+            <div class="preview-head">
+              <span>VISTA 3D</span>
+              <div class="viewer-controls">
+                <button id="viewZoomOut" type="button" aria-label="Alejar vista">−</button>
+                <button id="viewZoomIn" type="button" aria-label="Acercar vista">+</button>
+                <button id="viewReset" type="button" aria-label="Restablecer vista">Centrar</button>
+              </div>
+            </div>
+            <div class="transform-tools" role="toolbar" aria-label="Herramientas de transformación">
+              <button id="moveTool" type="button" aria-pressed="false">Mover X/Y</button>
+              <button id="rotateTool" type="button" aria-pressed="false">Girar</button>
+              <span id="rotationAxes" class="rotation-axes hidden" role="group" aria-label="Eje de giro">
+                <button type="button" data-rotation-axis="rotationX" aria-pressed="true">Eje X</button>
+                <button type="button" data-rotation-axis="rotationY" aria-pressed="false">Eje Y</button>
+                <button type="button" data-rotation-axis="rotationZ" aria-pressed="false">Eje Z</button>
+              </span>
+              <span id="transformToolHint" aria-live="polite">Elige una herramienta para transformar el modelo</span>
+            </div>
+            <div class="model-view">
+              <canvas id="modelCanvas" tabindex="0" aria-label="Modelo 3D interactivo; arrastra para girar y usa la rueda para acercar"></canvas>
+              <div id="modelViewEmpty" class="model-view-empty">Carga un STL para ver el modelo en 3D</div>
+              <div id="layerControl" class="viewer-layer-control hidden">
+                <label for="layerSlider">Capa</label>
+                <input id="layerSlider" type="range" min="0" max="0" value="0">
+                <output id="layerValue">—</output>
+              </div>
+              <div id="layerCommandPanel" class="layer-command-panel hidden">
+                <div class="layer-command-heading">
+                  <strong>Cambio de filamento en capa <span id="layerCommandNumber">1</span></strong>
+                  <button id="closeLayerCommand" type="button" aria-label="Cerrar">×</button>
+                </div>
+                <div class="field">
+                  <label for="layerCommandMode">Comando para esta impresora</label>
+                  <select id="layerCommandMode">
+                    <option value="automatic">Automático según firmware</option>
+                    <option value="custom">Comando personalizado</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="layerCommandText">G-code a insertar</label>
+                  <textarea id="layerCommandText" rows="2" maxlength="500" spellcheck="false"></textarea>
+                </div>
+                <p id="layerCommandHint" class="layer-command-hint"></p>
+                <div class="layer-command-actions">
+                  <button id="saveLayerCommand" type="button">Guardar en esta capa</button>
+                  <button id="removeLayerCommand" class="hidden" type="button">Quitar cambio</button>
+                </div>
+                <div id="layerCommandList" class="layer-command-list" aria-live="polite"></div>
+              </div>
+            </div>
+            <p class="viewer-hint">Arrastra con botón izquierdo para girar la vista · elige Mover X/Y o Girar y arrastra sobre el modelo con el botón derecho; Mayús + clic en la barra abre el comando de cambio para esa capa</p>
+          </section>
+        </section>
+
+        <aside class="settings-panel panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">02 — CONFIGURACIÓN</p>
+              <h2>Perfil de impresión</h2>
+            </div>
+          </div>
+
+          <form id="settingsForm">
+            <div class="field">
+              <label for="firmwareProfile">Firmware / comandos</label>
+              <select id="firmwareProfile">
+                <option value="marlin">Marlin</option>
+                <option value="klipper">Klipper (macros)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="printerProfile">Impresora / perfil</label>
+              <select id="printerProfile">
+                <option value="ender3">Creality Ender 3 / Pro</option>
+                <option value="ender3v2">Creality Ender 3 V2</option>
+                <option value="ender3s1">Creality Ender 3 S1</option>
+                <option value="prusa-mk3s">Prusa i3 MK3S / MK3S+</option>
+                <option value="kobra">Anycubic Kobra</option>
+                <optgroup label="BIQU">
+                  <option value="biqu-b1">BIQU B1</option>
+                  <option value="biqu-b1-se-plus">BIQU B1 SE Plus</option>
+                  <option value="biqu-bx">BIQU BX</option>
+                  <option value="biqu-hurakan">BIQU Hurakan (Klipper)</option>
+                </optgroup>
+                <option value="custom">Personalizada (Marlin)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="printerName">Nombre de la impresora</label>
+              <input id="printerName" type="text" value="Creality Ender 3 / Pro" maxlength="60" required>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="bedX">Cama X <span>mm</span></label>
+                <input id="bedX" type="number" min="10" max="1000" step="1" value="220" required>
+              </div>
+              <div class="field">
+                <label for="bedY">Cama Y <span>mm</span></label>
+                <input id="bedY" type="number" min="10" max="1000" step="1" value="220" required>
+              </div>
+            </div>
+            <div class="field">
+              <label for="bedZ">Altura máxima Z <span>mm</span></label>
+              <input id="bedZ" type="number" min="10" max="2000" step="1" value="250" required>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="layerHeight">Altura de capa <span>mm</span></label>
+                <input id="layerHeight" type="number" min="0.08" max="0.4" step="0.01" value="0.20" required>
+              </div>
+              <div class="field">
+                <label for="nozzle">Boquilla <span>mm</span></label>
+                <input id="nozzle" type="number" min="0.2" max="1.2" step="0.05" value="0.40" required>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="infill">Relleno</label>
+                <div class="input-suffix"><input id="infill" type="number" min="0" max="100" step="5" value="20" required><span>%</span></div>
+              </div>
+              <div class="field">
+                <label for="filament">Filamento</label>
+                <select id="filament">
+                  <option value="1.75">PLA · 1.75 mm</option>
+                  <option value="2.85">Filamento · 2.85 mm</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="nozzleTemp">Temperatura nozzle <span>°C</span></label>
+                <input id="nozzleTemp" type="number" min="150" max="300" step="1" value="200" required>
+              </div>
+              <div class="field">
+                <label for="bedTemp">Temperatura cama <span>°C</span></label>
+                <input id="bedTemp" type="number" min="0" max="130" step="1" value="60" required>
+              </div>
+            </div>
+            <div class="field">
+              <label for="printSpeed">Velocidad de impresión <span>mm/s</span></label>
+              <input id="printSpeed" type="number" min="10" max="300" step="5" value="50" required>
+            </div>
+            <label class="checkbox-option" for="excludeObjects">
+              <input id="excludeObjects" type="checkbox">
+              <span class="checkbox-option-copy">
+                <strong>Permitir cancelar objetos durante la impresión</strong>
+                <small>Klipper: activa [exclude_object] y usa una interfaz compatible, como Mainsail o Fluidd.</small>
+              </span>
+            </label>
+            <details class="gcode-settings">
+              <summary>Comandos de inicio y fin (G-code)</summary>
+              <p>Plantillas editables. Variables: {BED_TEMP}, {NOZZLE_TEMP}, {BED_X}, {BED_Y}, {PRINTER}. Klipper usa las macros START_PRINT y END_PRINT.</p>
+              <div class="field">
+                <label for="startGcode">Inicio</label>
+                <textarea id="startGcode" rows="7" required></textarea>
+              </div>
+              <div class="field">
+                <label for="endGcode">Fin</label>
+                <textarea id="endGcode" rows="5" required></textarea>
+              </div>
+            </details>
+          </form>
+
+          <div class="beta-note">
+            <span aria-hidden="true">i</span>
+            <p>Los perfiles ajustan la cama y los comandos Marlin/Klipper seleccionados; no conectan con la impresora ni detectan su firmware. La cancelación de objetos requiere Klipper con [exclude_object] y una interfaz compatible. Revisa el G-code antes de imprimir: no incluye soportes ni compensación de boquilla.</p>
+          </div>
+          <button id="sliceButton" class="primary-button" type="button" disabled>
+            <span aria-hidden="true">✳</span> Laminar modelo
+          </button>
+          <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
+        </aside>
+        </div>
+
+        <section id="resultPanel" class="result-panel panel hidden">
+        <div class="result-heading">
+          <div>
+            <p class="eyebrow">03 — RESULTADO</p>
+            <h2>Listo para revisar</h2>
+          </div>
+          <div class="result-actions">
+            <button id="printToPrinterButton" class="print-to-printer-button hidden" type="button" disabled><span aria-hidden="true">↑</span> Cargar e imprimir</button>
+            <button id="downloadButton" class="download-button" type="button"><span aria-hidden="true">↓</span> Descargar G-code</button>
+          </div>
+        </div>
+        <div class="result-stats">
+          <div><span>CAPAS</span><strong id="resultLayers">—</strong></div>
+          <div><span>TIEMPO ESTIMADO</span><strong id="resultTime">—</strong></div>
+          <div><span>FILAMENTO ESTIMADO</span><strong id="resultFilament">—</strong></div>
+          <div><span>TAMAÑO G-CODE</span><strong id="resultSize">—</strong></div>
+        </div>
+        <p class="time-estimate-note">Estimación aproximada del movimiento; no incluye calentamiento ni tiempos de macros de Klipper.</p>
+        <details class="gcode-details">
+          <summary>Vista previa del G-code</summary>
+          <pre id="gcodePreview"></pre>
+        </details>
+        </section>
+      </div>
+
+      <section id="printerView" class="printer-view hidden" aria-labelledby="myPrinterTitle">
+        <div class="intro">
+          <p class="eyebrow">CONEXIÓN LOCAL · CONFIGURACIONES GUARDADAS</p>
+          <h1 id="myPrinterTitle">Mi <span>impresora.</span></h1>
+          <p class="intro-copy">Guarda perfiles del laminador y abre el panel web de tu impresora dentro de la app.</p>
+        </div>
+
+        <section class="saved-printers panel" aria-labelledby="savedPrintersTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">TUS EQUIPOS</p>
+              <h2 id="savedPrintersTitle">Impresoras guardadas</h2>
+            </div>
+            <button id="toggleSavedPrinters" class="collapse-toggle" type="button" aria-expanded="true" aria-controls="savedPrintersContent" aria-label="Ocultar impresoras guardadas">
+              <span class="collapse-toggle-label">Ocultar</span>
+              <span class="collapse-toggle-arrow" aria-hidden="true">⌄</span>
+            </button>
+          </div>
+          <div id="savedPrintersContent">
+            <p class="saved-printers-help">Guarda la configuración seleccionada en el laminador, junto con un nombre y, si tiene, la IP o URL de su panel web.</p>
+            <form id="savedPrinterForm" class="saved-printer-form">
+              <div class="field">
+                <label for="savedPrinterName">Nombre para guardar</label>
+                <input id="savedPrinterName" type="text" maxlength="60" placeholder="Mi impresora" required>
+              </div>
+              <div class="field">
+                <label for="printerAddress">IP, nombre de red o URL <span>(opcional)</span></label>
+                <input id="printerAddress" type="text" inputmode="url" autocomplete="url" placeholder="192.168.1.50 o http://impresora.local" maxlength="253">
+              </div>
+              <div class="saved-printer-actions">
+                <button class="primary-button" type="submit">Guardar impresora y configuración</button>
+                <button id="cancelSavedPrinterEdit" class="secondary-button hidden" type="button">Cancelar edición</button>
+              </div>
+            </form>
+            <p id="printerConnectionStatus" class="printer-connection-status" role="status" aria-live="polite">La dirección y las configuraciones se guardan solo en este dispositivo.</p>
+            <div id="savedPrintersList" class="saved-printers-list"></div>
+          </div>
+        </section>
+
+        <section class="printer-browser panel" aria-labelledby="printerBrowserTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">PANEL WEB</p>
+              <h2 id="printerBrowserTitle">Impresora en la app</h2>
+            </div>
+            <a id="externalPrinterLink" class="secondary-button hidden" target="_blank" rel="noopener noreferrer">Abrir fuera de la app</a>
+          </div>
+          <p id="printerFrameEmpty" class="printer-frame-empty">Guarda una impresora con su dirección y pulsa «Conectar» para abrir su panel aquí.</p>
+          <iframe id="printerFrame" class="printer-frame hidden" title="Panel web de la impresora" referrerpolicy="no-referrer"></iframe>
+          <p class="printer-frame-note">El panel debe permitir mostrarse dentro de otra página. Si queda en blanco o el navegador bloquea la conexión, el servidor web de la impresora puede impedir la inserción o no ser accesible desde esta red.</p>
+        </section>
+      </section>
+    </main>
+    <footer>Compilar STL <span>·</span> Los archivos se procesan localmente y no se suben a ningún servidor.</footer>
+    <script src="app.js" defer></script>
+  </body>
+</html>
