@@ -1,16 +1,16 @@
 "use strict";
 
-const CACHE_NAME = "compilar-stl-v24";
+const CACHE_NAME = "compilar-stl-v25";
 const APP_FILES = [
-  "./?build=24",
-  "./index.html?build=24",
-  "./styles.css?build=24",
-  "./app.js?build=24",
-  "./manifest.webmanifest?build=24",
-  "./icon.svg?build=24",
-  "./logo-compilar-stl.png?build=24",
-  "./logo-compilar-stl-192.png?build=24",
-  "./logo-compilar-stl-512.png?build=24"
+  "./?build=25",
+  "./index.html?build=25",
+  "./styles.css?build=25",
+  "./app.js?build=25",
+  "./manifest.webmanifest?build=25",
+  "./icon.svg?build=25",
+  "./logo-compilar-stl.png?build=25",
+  "./logo-compilar-stl-192.png?build=25",
+  "./logo-compilar-stl-512.png?build=25"
 ];
 
 self.addEventListener("install", (event) => {
